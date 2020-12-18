@@ -14,6 +14,9 @@
 	"ReadProxyAddressResolver": {
 		"deploy": false
 	},
+	"DebtCache": {
+		"deploy": false
+	},
 	"DelegateApprovals": {
 		"deploy": false
 	},
@@ -27,6 +30,9 @@
 		"deploy": false
 	},
 	"EtherCollateral": {
+		"deploy": false
+	},
+	"EtherCollateralsUSD": {
 		"deploy": false
 	},
 	"ExchangeRates": {
@@ -462,6 +468,15 @@
 		"deploy": false
 	},
 	"SynthiADA": {
+		"deploy": false
+	},
+	"FlexibleStorage": {
+		"deploy": false
+	},
+	"SystemSettings": {
+		"deploy": false
+	},
+	"TradingRewards": {
 		"deploy": false
 	}
 }

@@ -17,6 +17,7 @@ const {
 const {
 	ensureNetwork,
 	ensureDeploymentPath,
+	getDeploymentPathForNetwork,
 	loadAndCheckRequiredSources,
 	loadConnections,
 	confirmAction,
@@ -44,6 +45,7 @@ const replaceSynths = async ({
 	yes,
 }) => {
 	ensureNetwork(network);
+	deploymentPath = deploymentPath || getDeploymentPathForNetwork({ network });
 	ensureDeploymentPath(deploymentPath);
 
 	const { getTarget } = wrap({ network, fs, path });
@@ -269,7 +271,7 @@ const replaceSynths = async ({
 		});
 
 		// Ensure this new synth has its resolver cache set
-		await replacementSynth.methods.setResolverAndSyncCache(resolverAddress).send({
+		await replacementSynth.methods.rebuildCache().send({
 			from: account,
 			gas: Number(methodCallGasLimit),
 			gasPrice: w3utils.toWei(gasPrice.toString(), 'gwei'),

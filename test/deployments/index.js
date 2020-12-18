@@ -16,7 +16,7 @@ describe('deployments', () => {
 	networks
 		.filter(n => n !== 'local')
 		.forEach(network => {
-			describe(network, () => {
+			(network === 'goerli' ? describe.skip : describe)(network, () => {
 				const { getTarget, getSource, getStakingRewards, getSynths } = wrap({ network, fs, path });
 
 				// we need this outside the test runner in order to generate tests per contract name
@@ -135,7 +135,7 @@ describe('deployments', () => {
 							.call();
 						assert.strictEqual(availableSynths.length, synths.length);
 					});
-					synths.forEach(({ name, inverted, aggregator, index }) => {
+					synths.forEach(({ name, inverted, feed, index }) => {
 						describe(name, () => {
 							it('Synthetix has the synth added', async () => {
 								const foundSynth = await contracts.Synthetix.methods.synths(toBytes32(name)).call();
@@ -161,20 +161,21 @@ describe('deployments', () => {
 									assert.strictEqual(name[0], 's');
 								});
 							}
-							if (aggregator) {
+							if (feed) {
 								it(`checking aggregator of ${name}`, async () => {
 									const aggregatorActual = await contracts.ExchangeRates.methods
 										.aggregators(toBytes32(name))
 										.call();
-									assert.strictEqual(aggregatorActual, aggregator);
+									assert.strictEqual(aggregatorActual, feed);
 								});
 							}
 							if (index && Array.isArray(index)) {
 								it(`the index parameter of ${name} is a well formed array with correct entries of type`, () => {
 									for (const ix of index) {
-										assert.strictEqual(typeof ix.symbol, 'string');
-										assert.strictEqual(typeof ix.name, 'string');
+										assert.strictEqual(typeof ix.asset, 'string');
 										assert.strictEqual(typeof ix.units, 'number');
+										// TODO - add below back in once ropsten indexes are rebalanced with weights added at time of rebalancing
+										// assert.strictEqual(typeof ix.weight, 'number');
 									}
 								});
 							} else if (index) {
@@ -199,12 +200,13 @@ describe('deployments', () => {
 
 							// Note: instead of manually managing this list, it would be better to read this
 							// on-chain for each environment when a contract had the MixinResolver function
-							// `getResolverAddressesRequired()` and compile and check these. The problem is then
+							// `resolverAddressesRequired()` and compile and check these. The problem is then
 							// that would omit the deps from Depot and EtherCollateral which were not
 							// redeployed in Hadar (v2.21)
 							[
 								'BinaryOptionMarketFactory',
 								'BinaryOptionMarketManager',
+								'DebtCache',
 								'DelegateApprovals',
 								'Depot',
 								'EtherCollateral',
@@ -214,8 +216,9 @@ describe('deployments', () => {
 								'FeePool',
 								'FeePoolEternalStorage',
 								'FeePoolState',
-								// 'FlexibleStorage', to be added once SIP-64 is implemented
+								'FlexibleStorage',
 								'Issuer',
+								'Liquidations',
 								'RewardEscrow',
 								'RewardsDistribution',
 								'SupplySchedule',
@@ -224,12 +227,16 @@ describe('deployments', () => {
 								'SynthetixState',
 								'SynthsUSD',
 								'SynthsETH',
-								// 'SystemSettings',  to be added once SIP-64 is implemented
+								'SystemSettings',
 								'SystemStatus',
 							].forEach(name => {
 								it(`has correct address for ${name}`, async () => {
-									const actual = await resolver.methods.getAddress(toBytes32(name)).call();
-									assert.strictEqual(actual, targets[name].address);
+									if (!targets[name]) {
+										console.log(`Skipping ${name} in ${network} as it isnt found`);
+									} else {
+										const actual = await resolver.methods.getAddress(toBytes32(name)).call();
+										assert.strictEqual(actual, targets[name].address);
+									}
 								});
 							});
 						});
@@ -241,15 +248,38 @@ describe('deployments', () => {
 							([, { source }]) => !!sources[source].abi.find(({ name }) => name === 'resolver')
 						)
 						.forEach(([target, { source }]) => {
-							it(`${target} has correct address resolver`, async () => {
-								const Contract = getContract({
+							let Contract;
+							let foundResolver;
+							beforeEach(async () => {
+								Contract = getContract({
 									source,
 									target,
 								});
-								assert.strictEqual(
-									await Contract.methods.resolver().call(),
-									targets['AddressResolver'].address
+								foundResolver = await Contract.methods.resolver().call();
+							});
+							it(`${target} has correct address resolver`, async () => {
+								assert.ok(
+									foundResolver === targets['AddressResolver'].address ||
+										targets['ReadProxyAddressResolver'].address
 								);
+							});
+
+							it(`${target} isResolverCached is true`, async () => {
+								if ('isResolverCached' in Contract.methods) {
+									// prior to Shaula (v2.35.x), contracts with isResolverCached took the old resolver as an argument
+									const usesLegacy = !!Contract.options.jsonInterface.find(
+										({ name }) => name === 'isResolverCached'
+									).inputs.length;
+									assert.ok(
+										await Contract.methods
+											.isResolverCached(...[].concat(usesLegacy ? foundResolver : []))
+											.call()
+									);
+									// Depot is the only contract not currently updated to the latest MixinResolver so it
+									// doesn't expose the is cached predicate
+								} else if (target !== 'Depot') {
+									throw Error(`${target} is missing isResolverCached() function`);
+								}
 							});
 						});
 				});

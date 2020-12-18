@@ -10,7 +10,8 @@ import "./interfaces/ISystemSettings.sol";
 import "./SafeDecimalMath.sol";
 
 
-contract SystemSettings is Owned, MixinResolver, MixinSystemSettings, ISystemSettings {
+// https://docs.synthetix.io/contracts/source/contracts/systemsettings
+contract SystemSettings is Owned, MixinSystemSettings, ISystemSettings {
     using SafeMath for uint;
     using SafeDecimalMath for uint;
 
@@ -38,14 +39,7 @@ contract SystemSettings is Owned, MixinResolver, MixinSystemSettings, ISystemSet
     // Minimum Stake time may not exceed 1 weeks.
     uint public constant MAX_MINIMUM_STAKE_TIME = 1 weeks;
 
-    bytes32[24] private addressesToCache = [bytes32(0)];
-
-    constructor(address _owner, address _resolver)
-        public
-        Owned(_owner)
-        MixinResolver(_resolver, addressesToCache)
-        MixinSystemSettings()
-    {}
+    constructor(address _owner, address _resolver) public Owned(_owner) MixinSystemSettings(_resolver) {}
 
     // ========== VIEWS ==========
 
@@ -114,7 +108,39 @@ contract SystemSettings is Owned, MixinResolver, MixinSystemSettings, ISystemSet
         return getMinimumStakeTime();
     }
 
+    function debtSnapshotStaleTime() external view returns (uint) {
+        return getDebtSnapshotStaleTime();
+    }
+
+    function aggregatorWarningFlags() external view returns (address) {
+        return getAggregatorWarningFlags();
+    }
+
+    // SIP-63 Trading incentives
+    // determines if Exchanger records fee entries in TradingRewards
+    function tradingRewardsEnabled() external view returns (bool) {
+        return getTradingRewardsEnabled();
+    }
+
+    function crossDomainMessageGasLimit() external view returns (uint) {
+        return getCrossDomainMessageGasLimit();
+    }
+
     // ========== RESTRICTED ==========
+
+    function setCrossDomainMessageGasLimit(uint _crossDomainMessageGasLimit) external onlyOwner {
+        flexibleStorage().setUIntValue(
+            SETTING_CONTRACT_NAME,
+            SETTING_CROSS_DOMAIN_MESSAGE_GAS_LIMIT,
+            _crossDomainMessageGasLimit
+        );
+        emit CrossDomainMessageGasLimitChanged(_crossDomainMessageGasLimit);
+    }
+
+    function setTradingRewardsEnabled(bool _tradingRewardsEnabled) external onlyOwner {
+        flexibleStorage().setBoolValue(SETTING_CONTRACT_NAME, SETTING_TRADING_REWARDS_ENABLED, _tradingRewardsEnabled);
+        emit TradingRewardsEnabled(_tradingRewardsEnabled);
+    }
 
     function setWaitingPeriodSecs(uint _waitingPeriodSecs) external onlyOwner {
         flexibleStorage().setUIntValue(SETTING_CONTRACT_NAME, SETTING_WAITING_PERIOD_SECS, _waitingPeriodSecs);
@@ -218,7 +244,20 @@ contract SystemSettings is Owned, MixinResolver, MixinSystemSettings, ISystemSet
         emit MinimumStakeTimeUpdated(_seconds);
     }
 
+    function setDebtSnapshotStaleTime(uint _seconds) external onlyOwner {
+        flexibleStorage().setUIntValue(SETTING_CONTRACT_NAME, SETTING_DEBT_SNAPSHOT_STALE_TIME, _seconds);
+        emit DebtSnapshotStaleTimeUpdated(_seconds);
+    }
+
+    function setAggregatorWarningFlags(address _flags) external onlyOwner {
+        require(_flags != address(0), "Valid address must be given");
+        flexibleStorage().setAddressValue(SETTING_CONTRACT_NAME, SETTING_AGGREGATOR_WARNING_FLAGS, _flags);
+        emit AggregatorWarningFlagsUpdated(_flags);
+    }
+
     // ========== EVENTS ==========
+    event CrossDomainMessageGasLimitChanged(uint newLimit);
+    event TradingRewardsEnabled(bool enabled);
     event WaitingPeriodSecsUpdated(uint waitingPeriodSecs);
     event PriceDeviationThresholdUpdated(uint threshold);
     event IssuanceRatioUpdated(uint newRatio);
@@ -230,4 +269,6 @@ contract SystemSettings is Owned, MixinResolver, MixinSystemSettings, ISystemSet
     event RateStalePeriodUpdated(uint rateStalePeriod);
     event ExchangeFeeUpdated(bytes32 synthKey, uint newExchangeFeeRate);
     event MinimumStakeTimeUpdated(uint minimumStakeTime);
+    event DebtSnapshotStaleTimeUpdated(uint debtSnapshotStaleTime);
+    event AggregatorWarningFlagsUpdated(address flags);
 }

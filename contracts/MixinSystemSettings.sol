@@ -6,6 +6,7 @@ import "./MixinResolver.sol";
 import "./interfaces/IFlexibleStorage.sol";
 
 
+// https://docs.synthetix.io/contracts/source/contracts/mixinsystemsettings
 contract MixinSystemSettings is MixinResolver {
     bytes32 internal constant SETTING_CONTRACT_NAME = "SystemSettings";
 
@@ -20,15 +21,30 @@ contract MixinSystemSettings is MixinResolver {
     bytes32 internal constant SETTING_RATE_STALE_PERIOD = "rateStalePeriod";
     bytes32 internal constant SETTING_EXCHANGE_FEE_RATE = "exchangeFeeRate";
     bytes32 internal constant SETTING_MINIMUM_STAKE_TIME = "minimumStakeTime";
+    bytes32 internal constant SETTING_AGGREGATOR_WARNING_FLAGS = "aggregatorWarningFlags";
+    bytes32 internal constant SETTING_TRADING_REWARDS_ENABLED = "tradingRewardsEnabled";
+    bytes32 internal constant SETTING_DEBT_SNAPSHOT_STALE_TIME = "debtSnapshotStaleTime";
+    bytes32 internal constant SETTING_CROSS_DOMAIN_MESSAGE_GAS_LIMIT = "crossDomainMessageGasLimit";
 
-    bytes32 private constant CONTRACT_FLEXIBLESTORAGE = "FlexibleStorage";
+    bytes32 internal constant CONTRACT_FLEXIBLESTORAGE = "FlexibleStorage";
 
-    constructor() internal {
-        appendToAddressCache(CONTRACT_FLEXIBLESTORAGE);
+    constructor(address _resolver) internal MixinResolver(_resolver) {}
+
+    function resolverAddressesRequired() public view returns (bytes32[] memory addresses) {
+        addresses = new bytes32[](1);
+        addresses[0] = CONTRACT_FLEXIBLESTORAGE;
     }
 
     function flexibleStorage() internal view returns (IFlexibleStorage) {
-        return IFlexibleStorage(requireAndGetAddress(CONTRACT_FLEXIBLESTORAGE, "Missing FlexibleStorage address"));
+        return IFlexibleStorage(requireAndGetAddress(CONTRACT_FLEXIBLESTORAGE));
+    }
+
+    function getCrossDomainMessageGasLimit() internal view returns (uint) {
+        return flexibleStorage().getUIntValue(SETTING_CONTRACT_NAME, SETTING_CROSS_DOMAIN_MESSAGE_GAS_LIMIT);
+    }
+
+    function getTradingRewardsEnabled() internal view returns (bool) {
+        return flexibleStorage().getBoolValue(SETTING_CONTRACT_NAME, SETTING_TRADING_REWARDS_ENABLED);
     }
 
     function getWaitingPeriodSecs() internal view returns (uint) {
@@ -80,5 +96,13 @@ contract MixinSystemSettings is MixinResolver {
 
     function getMinimumStakeTime() internal view returns (uint) {
         return flexibleStorage().getUIntValue(SETTING_CONTRACT_NAME, SETTING_MINIMUM_STAKE_TIME);
+    }
+
+    function getAggregatorWarningFlags() internal view returns (address) {
+        return flexibleStorage().getAddressValue(SETTING_CONTRACT_NAME, SETTING_AGGREGATOR_WARNING_FLAGS);
+    }
+
+    function getDebtSnapshotStaleTime() internal view returns (uint) {
+        return flexibleStorage().getUIntValue(SETTING_CONTRACT_NAME, SETTING_DEBT_SNAPSHOT_STALE_TIME);
     }
 }

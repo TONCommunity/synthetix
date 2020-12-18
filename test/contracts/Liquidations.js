@@ -37,6 +37,7 @@ contract('Liquidations', accounts => {
 		systemSettings,
 		systemStatus,
 		feePoolState,
+		debtCache,
 		issuer,
 		timestamp;
 
@@ -53,6 +54,7 @@ contract('Liquidations', accounts => {
 			SystemSettings: systemSettings,
 			SystemStatus: systemStatus,
 			FeePoolState: feePoolState,
+			DebtCache: debtCache,
 			Issuer: issuer,
 		} = await setupAllContracts({
 			accounts,
@@ -63,6 +65,7 @@ contract('Liquidations', accounts => {
 				'Exchanger', // required for Synthetix to check if exchanger().hasWaitingPeriodOrSettlementOwing
 				'FeePool',
 				'FeePoolState', // required for checking issuance data appended
+				'DebtCache',
 				'Issuer',
 				'Liquidations',
 				'SystemStatus', // test system status controls
@@ -91,12 +94,13 @@ contract('Liquidations', accounts => {
 		await exchangeRates.updateRates([SNX], [rate].map(toUnit), timestamp, {
 			from: oracle,
 		});
+		await debtCache.takeDebtSnapshot();
 	};
 
 	it('ensure only known functions are mutative', () => {
 		ensureOnlyExpectedMutativeFunctions({
 			abi: liquidations.abi,
-			ignoreParents: ['MixinResolver'],
+			ignoreParents: ['Owned', 'MixinResolver'],
 			expected: [
 				'flagAccountForLiquidation',
 				'removeAccountInLiquidation',
@@ -158,13 +162,13 @@ contract('Liquidations', accounts => {
 				it('when flagAccountForLiquidation() is invoked, it reverts for rate stale', async () => {
 					await assert.revert(
 						liquidations.flagAccountForLiquidation(alice, { from: owner }),
-						'Rate stale or not a synth'
+						'Rate invalid or not a synth'
 					);
 				});
 				it('when checkAndRemoveAccountInLiquidation() is invoked, it reverts for rate stale', async () => {
 					await assert.revert(
 						liquidations.checkAndRemoveAccountInLiquidation(alice, { from: owner }),
-						'Rate stale or not a synth'
+						'Rate invalid or not a synth'
 					);
 				});
 			});
@@ -201,8 +205,8 @@ contract('Liquidations', accounts => {
 						}
 					);
 
-					await liquidations.setResolverAndSyncCache(addressResolver.address, { from: owner });
-					await systemSettings.setResolverAndSyncCache(addressResolver.address, { from: owner });
+					await liquidations.rebuildCache();
+					await systemSettings.rebuildCache();
 				});
 				it('when flagAccountForLiquidation() is invoked, it reverts with liquidation ratio not set', async () => {
 					await assert.revert(
@@ -233,7 +237,7 @@ contract('Liquidations', accounts => {
 					});
 
 					// now have Liquidations resync its cache
-					await liquidations.setResolverAndSyncCache(addressResolver.address, { from: owner });
+					await liquidations.rebuildCache();
 				});
 				it('removeAccountInLiquidation() can only be invoked by issuer', async () => {
 					await onlyGivenAddressCanInvoke({
@@ -321,10 +325,7 @@ contract('Liquidations', accounts => {
 					await addressResolver.importAddresses(['Exchanger'].map(toBytes32), [exchanger.address], {
 						from: owner,
 					});
-					await Promise.all([
-						synthetix.setResolverAndSyncCache(addressResolver.address, { from: owner }),
-						issuer.setResolverAndSyncCache(addressResolver.address, { from: owner }),
-					]);
+					await Promise.all([synthetix.rebuildCache(), issuer.rebuildCache()]);
 				});
 
 				it('when a liquidator has SettlementOwing from hasWaitingPeriodOrSettlementOwing then revert', async () => {
@@ -369,10 +370,10 @@ contract('Liquidations', accounts => {
 					assert.bnEqual(await liquidations.liquidationCollateralRatio(), toUnit('2'));
 				});
 				it('and liquidation penalty is 10%', async () => {
-					assert.bnEqual(await liquidations.liquidationPenalty(), toUnit('.1'));
+					assert.bnEqual(await liquidations.liquidationPenalty(), LIQUIDATION_PENALTY);
 				});
-				it('and liquidation delay is 2 weeks', async () => {
-					assert.bnEqual(await liquidations.liquidationDelay(), week * 2);
+				it('and liquidation delay is 3 days', async () => {
+					assert.bnEqual(await liquidations.liquidationDelay(), LIQUIDATION_DELAY);
 				});
 				describe('when Alice has not been flagged for liquidation', () => {
 					it('and Alice calls checkAndRemoveAccountInLiquidation then it reverts', async () => {
@@ -531,6 +532,7 @@ contract('Liquidations', accounts => {
 								await sUSDContract.issue(bob, sUSD100, {
 									from: owner,
 								});
+								await debtCache.takeDebtSnapshot();
 
 								// Bob Liquidates Alice
 								await assert.revert(
@@ -789,13 +791,9 @@ contract('Liquidations', accounts => {
 									});
 									describe('when carol liquidates Alice with 10 x 5 sUSD', () => {
 										beforeEach(async () => {
-											await Promise.all(
-												Array(10)
-													.fill(0)
-													.map(() =>
-														synthetix.liquidateDelinquentAccount(alice, sUSD5, { from: carol })
-													)
-											);
+											for (let i = 0; i < 10; i++) {
+												await synthetix.liquidateDelinquentAccount(alice, sUSD5, { from: carol });
+											}
 										});
 										it('then Carols sUSD balance is reduced by 50 sUSD', async () => {
 											assert.bnEqual(await sUSDContract.balanceOf(carol), 0);
@@ -1075,7 +1073,7 @@ contract('Liquidations', accounts => {
 
 				assert.isTrue(davidDebtBefore.gt(collateralInUSD));
 			});
-			describe('when Bob flags and tries to liquidate Cavid', () => {
+			describe('when Bob flags and tries to liquidate David', () => {
 				beforeEach(async () => {
 					// flag account for liquidation
 					await liquidations.flagAccountForLiquidation(david, {
@@ -1105,7 +1103,7 @@ contract('Liquidations', accounts => {
 					it('then liquidate reverts', async () => {
 						await assert.revert(
 							synthetix.liquidateDelinquentAccount(david, sUSD100, { from: bob }),
-							'A synth or SNX rate is stale'
+							'A synth or SNX rate is invalid'
 						);
 					});
 				});

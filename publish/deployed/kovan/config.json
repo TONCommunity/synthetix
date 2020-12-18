@@ -20,6 +20,9 @@
 	"DelegateApprovalsEternalStorage": {
 		"deploy": false
 	},
+	"DebtCache": {
+		"deploy": false
+	},
 	"Depot": {
 		"deploy": false
 	},
@@ -27,6 +30,9 @@
 		"deploy": false
 	},
 	"EtherCollateral": {
+		"deploy": false
+	},
+	"EtherCollateralsUSD": {
 		"deploy": false
 	},
 	"ExchangeRates": {
@@ -45,6 +51,9 @@
 		"deploy": false
 	},
 	"FeePoolEternalStorage": {
+		"deploy": false
+	},
+	"FlexibleStorage": {
 		"deploy": false
 	},
 	"Issuer": {
@@ -72,6 +81,9 @@
 		"deploy": false
 	},
 	"SynthetixState": {
+		"deploy": false
+	},
+	"SystemSettings": {
 		"deploy": false
 	},
 	"SystemStatus": {
@@ -462,6 +474,9 @@
 		"deploy": false
 	},
 	"SynthiADA": {
+		"deploy": false
+	},
+	"TradingRewards": {
 		"deploy": false
 	}
 }
